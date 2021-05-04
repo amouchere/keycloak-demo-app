@@ -1,0 +1,230 @@
+<!--
+  ~ Copyright 2016 Red Hat, Inc. and/or its affiliates
+  ~ and other contributors as indicated by the @author tags.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~ http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<html>
+
+<head>
+  <script src="https://lemur-1.cloud-iam.com/auth/js/keycloak.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js" integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI=" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js" type="text/javascript"></script>
+</head>
+
+<body>
+  <h1>Application d'Antoine</h1>
+  <div>
+    <button onclick="keycloak.login()">Login</button>
+    <button onclick="openModal()" type="button">Login via modal</button>
+    <button onclick="keycloak.logout()">Logout</button>
+    <button onclick="keycloak.register()">Register</button>
+    <button onclick="keycloak.accountManagement()">Account</button>
+    <button onclick="refreshToken(9999)">Refresh Token</button>
+    <button onclick="refreshToken(30)">Refresh Token (if inf of 30s validity)</button>
+    <button onclick="loadUserInfo()">Get User Info</button>
+    <button onclick="output(keycloak.tokenParsed)">Show Token</button>
+    <button onclick="output(keycloak.refreshTokenParsed)">
+      Show Refresh Token
+    </button>
+    <button onclick="output(keycloak.idTokenParsed)">Show ID Token</button>
+    <button onclick="showExpires()">Show Expires</button>
+    <button onclick="output(keycloak)">Show Details</button>
+    <button onclick="output(keycloak.createLoginUrl())">
+      Show Login URL
+    </button>
+    <button onclick="output(keycloak.createLogoutUrl())">
+      Show Logout URL
+    </button>
+    <button onclick="output(keycloak.createRegisterUrl())">
+      Show Register URL
+    </button>
+    <button onclick="updatePassword()">
+      Open update password
+    </button>
+  </div>
+
+  <h2>Result</h2>
+  <pre style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;" id="output"></pre>
+
+  <h2>Events</h2>
+  <pre style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;" id="events"></pre>
+
+  <!-- Modal -->
+  <div id="myModal" class="modal fade" role="dialog">
+    <div class="modal-dialog">
+
+      <!-- Modal content-->
+      <div class="modal-content" style="height:650px">
+        <button style="position: absolute; top: 5; right: 12px; font-size: 50px;" type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        <iframe id="iframe" frameborder="0" style="overflow:hidden;height:100%;width:100%" height="100%" width="100%">
+        </iframe>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+
+    function updatePassword() {
+      document.location.replace("http://localhost:8080/auth/realms/webauthn/login-actions/reset-credentials?client_id=client-test");
+    }
+
+    function loadUserInfo() {
+      keycloak
+        .loadUserInfo()
+        .success(function (userInfo) {
+          output(userInfo);
+        })
+        .error(function () {
+          output("Failed to load user info");
+        });
+    }
+
+    function refreshToken(minValidity) {
+      keycloak
+        .updateToken(minValidity)
+        .success(function (refreshed) {
+          if (refreshed) {
+            output(keycloak.tokenParsed);
+          } else {
+            output(
+              "Token not refreshed, valid for " +
+              Math.round(
+                keycloak.tokenParsed.exp +
+                keycloak.timeSkew -
+                new Date().getTime() / 1000
+              ) +
+              " seconds"
+            );
+          }
+        })
+        .error(function () {
+          output("Failed to refresh token");
+        });
+    }
+
+    function showExpires() {
+      if (!keycloak.tokenParsed) {
+        output("Not authenticated");
+        return;
+      }
+      var o =
+        "Token Expires:\t\t" +
+        new Date(
+          (keycloak.tokenParsed.exp + keycloak.timeSkew) * 1000
+        ).toLocaleString() +
+        "\n";
+      o +=
+        "Token Expires in:\t" +
+        Math.round(
+          keycloak.tokenParsed.exp +
+          keycloak.timeSkew -
+          new Date().getTime() / 1000
+        ) +
+        " seconds\n";
+      if (keycloak.refreshTokenParsed) {
+        o +=
+          "Refresh Token Expires:\t" +
+          new Date(
+            (keycloak.refreshTokenParsed.exp + keycloak.timeSkew) * 1000
+          ).toLocaleString() +
+          "\n";
+        o +=
+          "Refresh Expires in:\t" +
+          Math.round(
+            keycloak.refreshTokenParsed.exp +
+            keycloak.timeSkew -
+            new Date().getTime() / 1000
+          ) +
+          " seconds";
+      }
+      output(o);
+    }
+
+    function output(data) {
+      console.log("data : " + data)
+      if (typeof data === "object") {
+        data = JSON.stringify(data, null, "  ");
+      }
+      document.getElementById("output").innerHTML = data;
+    }
+
+    function event(event) {
+      var e = document.getElementById("events").innerHTML;
+      document.getElementById("events").innerHTML =
+        new Date().toLocaleString() + "\t" + event + "\n" + e;
+    }
+
+    function openModal() {
+      if (typeof keycloak.profile === "undefined") {
+        var iframe = document.getElementById('iframe');
+        iframe.src = keycloak.createLoginUrl({ redirectUri: "http://localhost:8081/client-test/close" });
+        $('#myModal').modal('show');
+      }
+
+    };
+
+    function closeIFrame() {
+      $('#myModal').modal('hide');
+      keycloak.login()
+    }
+    
+    var keycloak = Keycloak();
+    
+    keycloak.onAuthSuccess = function () {
+      event("Auth Success");
+    };
+    keycloak.onAuthError = function (errorData) {
+      event("Auth Error: " + JSON.stringify(errorData));
+    };
+    keycloak.onAuthRefreshSuccess = function () {
+      event("Auth Refresh Success");
+    };
+    keycloak.onAuthRefreshError = function () {
+      event("Auth Refresh Error");
+    };
+    keycloak.onAuthLogout = function () {
+      event("Auth Logout :(");
+    };
+    keycloak.onTokenExpired = function () {
+      event("Access token expired.");
+    };
+
+    // Flow can be changed to 'implicit' or 'hybrid', but then client must enable implicit flow in admin console too
+    var initOptions = {
+      responseMode: "fragment",
+      flow: "standard",      
+      checkLoginIframe: false
+    };
+    keycloak
+      .init(initOptions)
+      .success(function (authenticated) {
+        loadUserInfo();
+      })
+      .error(function () {
+        output("Init Error");
+      });
+
+
+
+
+
+  </script>
+</body>
+
+</html>
