@@ -2,7 +2,7 @@
   "realm": "keycloak-antoine",
   "auth-server-url": "https://lemur-3.cloud-iam.com/auth/",
   "ssl-required": "external",
-  "resource": "antoine-app",
+  "resource": "keycloak-demo-app",
   "public-client": true,
   "confidential-port": 0
 }
